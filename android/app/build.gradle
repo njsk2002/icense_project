@@ -1,0 +1,70 @@
+// 최신 Gradle 방식 적용
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+    id 'dev.flutter.flutter-gradle-plugin' // ✅ Flutter 최신 Gradle 플러그인
+}
+
+android {
+    namespace "kr.co.icense"
+    compileSdk 35 // ✅ 최신 버전 사용
+
+    defaultConfig {
+        applicationId "kr.co.icense"
+        minSdk 26 // ✅ 최소 지원 버전 (Flutter 최신 권장값)
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17  // ✅ Java 17 사용
+        targetCompatibility JavaVersion.VERSION_17  // ✅ Java 17 사용
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"  // ✅ Kotlin JVM 17 사용
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.debug
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+
+    lint {
+        disable 'InvalidPackage'
+    }
+
+    java {
+        toolchain {
+            languageVersion.set(JavaLanguageVersion.of(17))  // ✅ Java 17 강제 적용
+        }
+    }
+}
+
+flutter {
+    source '../..'
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.10"
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    implementation fileTree(dir: "libs", include: ["*.jar"]) // 라이브러리 추가
+    implementation "androidx.core:core-ktx:1.10.1"
+    // 기타 Flutter 프로젝트에 필요한 종속성 추가
+    implementation 'androidx.appcompat:appcompat:1.6.1' // 최신 버전
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}

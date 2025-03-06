@@ -1,0 +1,87 @@
+name: icense_project
+
+description: "ICEnse Project"
+publish_to: 'none' # 이 프로젝트는 pub.dev에 배포되지 않음
+
+version: 1.0.0+1 # 앱 버전 (메이저.마이너.패치+빌드번호)
+
+# ✅ Dart SDK 버전 설정 (Flutter 3.29.0 및 Dart 3.7.0 기반)
+environment:
+  sdk: ">=3.7.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 📌 아이콘 관련 플러그인 (iOS 스타일 아이콘 포함)
+  cupertino_icons: ^1.0.8
+
+  http: any
+
+  # ✅ `circle_wheel_scroll` 패키지 문제 해결
+  cached_network_image: ^3.1.0
+  circle_wheel_scroll:
+    path: ./circle_wheel_scroll  # ✅ 로컬 패키지가 실제 존재하는지 확인 후 유지 or 삭제
+
+  # 📷 이미지 및 비디오 관련 플러그인
+  image_picker: ^1.0.4 # 갤러리 또는 카메라에서 이미지 선택
+  video_player: ^2.8.1 # 비디오 재생 기능
+  camera: ^0.11.1 # 카메라 제어 기능
+
+  # 🔊 음성·영상 통화 기능 (Agora SDK)
+  agora_rtc_engine: ^6.5.0
+
+  # 🔑 권한 관리 플러그인 (카메라, 위치, NFC 등)
+  permission_handler: ^11.4.0
+
+  # 🌍 구글 지도 & GPS 위치 정보
+  google_maps_flutter: ^2.10.1 # 구글 지도 API
+  geolocator: ^13.0.2 # GPS 기반 위치 추적
+
+  # ▶️ 유튜브 플레이어
+  youtube_player_flutter: ^9.1.1 # 유튜브 영상 임베드
+
+  # 🌐 HTTP 요청 (REST API 클라이언트)
+  dio: ^5.8.0+1
+
+  # 📆 달력 및 날짜 관련 기능
+  table_calendar: ^3.2.0 # 캘린더 UI
+  intl: ^0.20.2 # 날짜 및 다국어 지원
+
+  # 📂 SQLite 데이터베이스 ORM (Drift 사용)
+  drift: ^2.25.1 # ORM 기능 (SQL을 객체처럼 사용)
+  sqlite3_flutter_libs: ^0.5.27 # SQLite DB 플러그인
+  drift_flutter: ^0.2.4 # Flutter에서 Drift 사용
+
+  # 🗂️ 파일 및 경로 관련 기능
+  path_provider: ^2.1.5 # 내부 저장소 경로 가져오기
+  path: ^1.9.1 # 경로 관련 기능
+
+  # 📌 글로벌 상태 관리 플러그인
+  get_it: ^8.0.3 # 의존성 주입 관리 (Dependency Injection)
+  provider: ^6.1.2 # 상태 관리 (State Management)
+
+  # 🌐 인앱 웹뷰
+  flutter_inappwebview: ^6.1.5 # 웹뷰 기능 (유튜브, 지도 등)
+
+  # 📲 NFC 기능 지원
+  flutter_nfc_kit: ^3.5.2 # NFC 태그 읽기/쓰기 기능
+  image_gallery_saver_plus: ^3.0.5
+
+dev_dependencies:
+  flutter_lints: ^5.0.0 # 코드 린트 (권장 스타일 체크)
+  drift_dev: ^2.10.0 # Drift ORM 코드 생성 도구
+  build_runner: ^2.4.6 # 코드 생성 자동화 도구
+
+flutter:
+  uses-material-design: true # 머티리얼 디자인 사용
+
+  # 📂 앱에서 사용할 이미지 경로 등록 (❗ 폴더가 실제 존재하는지 확인)
+  assets:
+    - assets/
+    - assets/img/
+    - images/ # ✅ 폴더가 존재하는지 확인 후 추가
+    - images/characters/
+    - images/balls/
+    - images/shoes/
+    - images/credit_cards/

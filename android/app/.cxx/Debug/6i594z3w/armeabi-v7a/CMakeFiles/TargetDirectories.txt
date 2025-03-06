@@ -1,0 +1,2 @@
+C:/DavidProject/flutter_project/flutter_sample/android/app/.cxx/Debug/6i594z3w/armeabi-v7a/CMakeFiles/edit_cache.dir
+C:/DavidProject/flutter_project/flutter_sample/android/app/.cxx/Debug/6i594z3w/armeabi-v7a/CMakeFiles/rebuild_cache.dir
