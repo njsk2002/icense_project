@@ -11,17 +11,28 @@ const brands = ['e-명함', 'e-카드 만들기', 'e-쉐어카드', '사진', '�
 const marginSide = 14.0;
 
 class Shoe {
-  final String name, image, bmpFile;
+  final String name, image, bmp_42_mono,bmp_42_3color, bmp_37_4color, bmp_29_4color;
   final double price;
   final Color color;
 
-  Shoe({required this.name, required this.image, required this.price, required this.color, required this.bmpFile});
+  Shoe({
+    required this.name,
+    required this.image,
+    required this.price,
+    required this.color,
+    required this.bmp_42_mono,
+    required this.bmp_42_3color,
+    required this.bmp_37_4color,
+    required this.bmp_29_4color});
 
   factory Shoe.fromJson(Map<String, dynamic> json) {
     return Shoe(
-      name: json['star_name'] ?? 'Unknown',  // ✅ 이름 (기본값: 'Unknown')
+      name: json['key_word'] ?? 'Unknown',  // ✅ 이름 (기본값: 'Unknown')
       image: json['url'] ?? '',  // ✅ URL을 이미지로 사용
-      bmpFile: json['bmp_file'] ?? '',  // ✅ URL을 이미지로 사용
+      bmp_42_mono: json['bmp_42_mono'] ?? '',  // ✅ URL을 이미지로 사용
+      bmp_42_3color: json['bmp_42_3color'] ?? '',  // ✅ URL을 이미지로 사용
+      bmp_37_4color: json['bmp_37_4color'] ?? '',  // ✅ URL을 이미지로 사용
+      bmp_29_4color: json['bmp_29_4color'] ?? '',  // ✅ URL을 이미지로 사용
       price: 0.0,  // ✅ 가격이 없으므로 기본값 0.0 사용
       color: Color(0xFF5574b9),  // ✅ JSON에 "color" 값이 없으므로 기본값 지정
     );
@@ -54,7 +65,8 @@ class _ShoesStorePageState extends State<ShoesStorePage> {
     isLoading = true; // ✅ setState() 전에 isLoading 변경
     developer.log("📢 API 요청: $currentPage 페이지 요청 중", name: "DEBUG_2"); // ✅ 로그 먼저 출력
 
-    final url = Uri.parse("http://192.168.0.136:5000/naverapi/admin_image?page=$currentPage&per_page=10");
+    //final url = Uri.parse("http://192.168.0.136:5000/naverapi/admin_image?page=$currentPage&per_page=10");
+    final url = Uri.parse("http://192.168.219.106:5000/naverapi/admin_image?page=$currentPage&per_page=10");
     //final url = Uri.parse("http://192.168.0.136:5000/naverapi/admin_image");
 
     try {
