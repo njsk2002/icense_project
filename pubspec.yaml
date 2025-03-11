@@ -68,6 +68,9 @@ dependencies:
   flutter_nfc_kit: ^3.5.2 # NFC 태그 읽기/쓰기 기능
   image_gallery_saver_plus: ^3.0.5
 
+  # url launcher
+  url_launcher: ^6.1.5
+
 dev_dependencies:
   flutter_lints: ^5.0.0 # 코드 린트 (권장 스타일 체크)
   drift_dev: ^2.10.0 # Drift ORM 코드 생성 도구

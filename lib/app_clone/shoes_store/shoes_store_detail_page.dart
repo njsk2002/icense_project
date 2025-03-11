@@ -45,7 +45,7 @@ class _ShoesStoreDetailPageState extends State<ShoesStoreDetailPage> {
     if (bmpurl != null) {
       setState(() {
         bmpImageUrl =
-        "http://192.168.219.106:5000/naverapi/get_bmp?key_word=${Uri.encodeComponent(widget.shoe!.name)}&bmp_file=${Uri.encodeComponent(bmpurl)}&t=${DateTime.now().millisecondsSinceEpoch}";
+        "http://192.168.0.136:5000/naverapi/get_bmp?key_word=${Uri.encodeComponent(widget.shoe!.name)}&bmp_file=${Uri.encodeComponent(bmpurl)}&t=${DateTime.now().millisecondsSinceEpoch}";
         isBmpView = true;
         selectedBmpUrl = bmpurl;
       });

@@ -4,14 +4,23 @@ import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:icense_project/app_clone/shoes_store/shoes_store_detail_page.dart';
+import 'package:icense_project/app_clone/android_messages/android_messages_page.dart';
+import 'package:icense_project/app_clone/movies_concept/movies_concept_page.dart';
+import 'package:icense_project/app_clone/credit_cards_concept/credit_cards_concept_page.dart';
+import 'package:icense_project/app_clone/travel_concept/travel_concept_page.dart';
 import 'package:vector_math/vector_math.dart' as vector;
+
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../navigation_bar/navigation_bar.dart'; // 외부 URL 열기 위해 추가
 
 const bottomBackgroundColor = Color(0xFFF1F2F7);
 const brands = ['e-명함', 'e-카드 만들기', 'e-쉐어카드', '사진', '나의페이지'];
 const marginSide = 14.0;
 
+/// Shoe 모델 클래스
 class Shoe {
-  final String name, image, bmp_42_mono,bmp_42_3color, bmp_37_4color, bmp_29_4color;
+  final String name, image, bmp_42_mono, bmp_42_3color, bmp_37_4color, bmp_29_4color;
   final double price;
   final Color color;
 
@@ -23,22 +32,24 @@ class Shoe {
     required this.bmp_42_mono,
     required this.bmp_42_3color,
     required this.bmp_37_4color,
-    required this.bmp_29_4color});
+    required this.bmp_29_4color,
+  });
 
   factory Shoe.fromJson(Map<String, dynamic> json) {
     return Shoe(
-      name: json['key_word'] ?? 'Unknown',  // ✅ 이름 (기본값: 'Unknown')
-      image: json['url'] ?? '',  // ✅ URL을 이미지로 사용
-      bmp_42_mono: json['bmp_42_mono'] ?? '',  // ✅ URL을 이미지로 사용
-      bmp_42_3color: json['bmp_42_3color'] ?? '',  // ✅ URL을 이미지로 사용
-      bmp_37_4color: json['bmp_37_4color'] ?? '',  // ✅ URL을 이미지로 사용
-      bmp_29_4color: json['bmp_29_4color'] ?? '',  // ✅ URL을 이미지로 사용
-      price: 0.0,  // ✅ 가격이 없으므로 기본값 0.0 사용
-      color: Color(0xFF5574b9),  // ✅ JSON에 "color" 값이 없으므로 기본값 지정
+      name: json['key_word'] ?? 'Unknown',
+      image: json['url'] ?? '',
+      bmp_42_mono: json['bmp_42_mono'] ?? '',
+      bmp_42_3color: json['bmp_42_3color'] ?? '',
+      bmp_37_4color: json['bmp_37_4color'] ?? '',
+      bmp_29_4color: json['bmp_29_4color'] ?? '',
+      price: 0.0,
+      color: const Color(0xFF5574b9),
     );
   }
 }
 
+/// 메인 ShoesStorePage 화면
 class ShoesStorePage extends StatefulWidget {
   @override
   _ShoesStorePageState createState() => _ShoesStorePageState();
@@ -46,49 +57,88 @@ class ShoesStorePage extends StatefulWidget {
 
 class _ShoesStorePageState extends State<ShoesStorePage> {
   final _pageController = PageController(viewportFraction: 0.78);
-  List<Shoe> shoes = [], shoesBottom = [];
+  List<Shoe> shoes = [];
+  List<Shoe> shoesBottom = [];
   int currentPage = 1;
-  bool isLoading = false;
+  bool _isLoading = false; // 로딩 상태
+  String selectedShoe = ""; // 선택된 신발 이름
+  // fetchedShoes는 호출 결과를 임시 저장(디버깅용)
+  List<Shoe> fetchedShoes = [];
 
   @override
   void initState() {
     super.initState();
-    developer.log("🔥 initState 실행됨", name: "DEBUG_2"); // ✅ initState 확인용 로그
-    _fetchShoes();
-    _pageController.addListener(() {
-      if (_pageController.page! >= shoes.length - 5) _fetchShoes();
+    developer.log("🔥 initState 실행됨", name: "DEBUG_2");
+    // 초기 데이터 로드
+    _fetchShoes().then((_) {
+      developer.log("✅ 초기 _fetchShoes 완료", name: "DEBUG_2");
     });
+    _pageController.addListener(() {
+      // 현재 페이지 인덱스 (실수형이므로 int로 변환)
+      int currentIndex = _pageController.page!.round();
+      // shoes 리스트에 currentIndex가 존재하는지 확인 후 진행
+      if (currentIndex < shoes.length &&
+          _pageController.page! >= shoes.length - 5) {
+        String currentShoeName = shoes[currentIndex].name;
+        _fetchShoes(keyword: currentShoeName);
+      }
+    });
+
   }
 
-  Future<void> _fetchShoes() async {
-    if (isLoading) return;
-    isLoading = true; // ✅ setState() 전에 isLoading 변경
-    developer.log("📢 API 요청: $currentPage 페이지 요청 중", name: "DEBUG_2"); // ✅ 로그 먼저 출력
+  /// 서버에서 데이터를 가져와 shoes와 shoesBottom을 업데이트한다.
+  /// keyword가 지정되면 해당 키워드에 따른 데이터를 가져온다.
+  Future<List<Shoe>> _fetchShoes({String? keyword}) async {
+    developer.log("🔎 _fetchShoes 시작, keyword: $keyword", name: "DEBUG_2");
 
-    //final url = Uri.parse("http://192.168.0.136:5000/naverapi/admin_image?page=$currentPage&per_page=10");
-    final url = Uri.parse("http://192.168.219.106:5000/naverapi/admin_image?page=$currentPage&per_page=10");
-    //final url = Uri.parse("http://192.168.0.136:5000/naverapi/admin_image");
+    String baseUrl = "http://192.168.0.136:5000/naverapi/admin_image?page=$currentPage&per_page=10";
+    String keyWordParam = (keyword != null && keyword.isNotEmpty)
+        ? "&key_word=${Uri.encodeComponent(keyword)}"
+        : "";
+    final url = Uri.parse("$baseUrl$keyWordParam");
+    developer.log("📢 API 요청 URL: $url", name: "DEBUG_2");
 
     try {
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(const Duration(seconds: 10));
       developer.log("📢 응답 코드: ${response.statusCode}", name: "DEBUG_2");
       developer.log("📢 응답 본문: ${response.body}", name: "DEBUG_2");
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body)['data'] as List;
+        final userkey = json.decode(response.body)['unique_key'] as List;
+
+        List<Shoe> newShoes = data.map((json) => Shoe.fromJson(json)).toList();
+        List<Shoe> newShoesBottom = userkey.map((json) => Shoe(
+          name: json['key_word'] ?? 'Unknown',
+          image: json['url'] ?? '',
+          bmp_42_mono: json.containsKey('bmp_42_mono') ? json['bmp_42_mono'] : '',
+          bmp_42_3color: json.containsKey('bmp_42_3color') ? json['bmp_42_3color'] : '',
+          bmp_37_4color: json.containsKey('bmp_37_4color') ? json['bmp_37_4color'] : '',
+          bmp_29_4color: json.containsKey('bmp_29_4color') ? json['bmp_29_4color'] : '',
+          price: json.containsKey('price') ? (json['price'] as num).toDouble() : 0.0,
+          color: const Color(0xFF5574b9),
+        )).toList();
+
+        developer.log("✅ 새 데이터 로드 성공, newShoes 개수: ${newShoes.length}", name: "DEBUG_2");
         setState(() {
-          shoes.addAll(data.map((json) => Shoe.fromJson(json)));
-          shoesBottom = shoes.take(2).toList();
+          // 상단과 하단 모두 새 데이터로 업데이트
+          shoes
+            ..clear()
+            ..addAll(newShoes);
+          shoesBottom
+            ..clear()
+            ..addAll(newShoesBottom);
           currentPage++;
-          isLoading = false;
+          // _isLoading은 onTap에서 관리됨.
         });
+        return newShoes;
       } else {
         developer.log("❌ 서버 오류: ${response.statusCode}", name: "DEBUG_2", level: 900);
-        setState(() => isLoading = false);
+        return [];
       }
     } catch (e) {
-      developer.log("❌ 네트워크 오류: $e", name: "DEBUG_2", level: 1000);
-      setState(() => isLoading = false);
+      developer.log("❌ 네트워크 오류 또는 타임아웃 발생: $e", name: "DEBUG_2", level: 1000);
+      return [];
     }
   }
 
@@ -99,14 +149,25 @@ class _ShoesStorePageState extends State<ShoesStorePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       bottomNavigationBar: _buildBottomNavigationBar(),
+      appBar: PreferredSize(
+        // PreferredSize 높이를 128로 늘려서 overflow를 방지
+        preferredSize: const Size.fromHeight(128),
+        child: const CommonHeader(),
+      ),
       body: Column(
         children: [
-          _buildHeader(),
           Expanded(
             child: Stack(
               children: [
                 _buildSideNavigation(),
-                Positioned(left: 0, bottom: 0, right: 0, child: _buildBottom()),
+                // 하단 바 (인덱스) 위치를 SafeArea로 감싸서 시스템 UI와 충돌하지 않도록 함
+                Positioned(
+                  left: 0,
+                  bottom: 0,
+                  right: 0,
+                  child: SafeArea(child: _buildBottom()),
+                ),
+                // 상단 PageView: shoes 리스트를 _buildShoeCard로 표시
                 Positioned(
                   left: 0,
                   right: 0,
@@ -126,121 +187,177 @@ class _ShoesStorePageState extends State<ShoesStorePage> {
     );
   }
 
-  Widget _buildHeader() => Padding(
-    padding: const EdgeInsets.all(marginSide),
-    child: Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text("ICEnse", style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700)),
-            Row(
-              children: [
-                IconButton(icon: Icon(Icons.search), onPressed: () {}),
-                IconButton(icon: Icon(Icons.notifications_none), onPressed: () {}),
-              ],
-            ),
-          ],
-        ),
-        SizedBox(height: 10),
-        SizedBox(
-          height: 40,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: brands.length,
-            itemBuilder: (_, index) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Text(
-                brands[index],
-                style: TextStyle(fontWeight: FontWeight.w700, color: index == 0 ? Colors.black : Colors.grey[400]),
+
+
+  /// 상단 PageView에 표시될 신발 카드 (상세 페이지로 이동)
+  Widget _buildShoeCard(Shoe shoe, Size size, {bool disableInkWell = false}) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 5.0),
+        child: InkWell(
+          onTap: disableInkWell
+              ? null
+              : () => Navigator.of(context).push(
+            MaterialPageRoute(
+                builder: (_) => ShoesStoreDetailPage(shoe: shoe)),
+          ),
+          child: Stack(
+            children: [
+              Card(
+                elevation: 6,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
+                color: shoe.color,
+                child: SizedBox(height: size.width / 1.8),
               ),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-
-  Widget _buildShoeCard(Shoe shoe, Size size) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 5.0),
-    child: InkWell(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => ShoesStoreDetailPage(shoe: shoe)),
-      ),
-      child: Stack(
-        children: [
-          // ✅ 카드 배경 (색상 & 그림자 적용)
-          Card(
-            elevation: 6,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            color: shoe.color,
-            child: SizedBox(height: size.width / 1.8), // ✅ 이미지 크기 조정
-          ),
-
-          // ✅ 네트워크 이미지 (Stack 아래 배치)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Image.network(
-              shoe.image,
-              width: double.infinity,
-              height: size.width,
-              fit: BoxFit.cover, // ✅ 이미지가 카드를 꽉 채우도록 설정
-            ),
-          ),
-
-          // ✅ 텍스트를 최상단에 배치
-          Positioned(
-            top: 12,
-            left: 12,
-            right: 12,
-            child: Container(
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                //color: Colors.black.withOpacity(0.5), // ✅ 반투명 배경 추가
-                borderRadius: BorderRadius.circular(8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.network(
+                  shoe.image,
+                  width: double.infinity,
+                  height: size.width,
+                  fit: BoxFit.cover,
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    shoe.name,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
+              Positioned(
+                top: 12,
+                left: 12,
+                right: 12,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        shoe.name,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "\$${shoe.price}",
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 14),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    "\$${shoe.price}",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 
-
-
+  /// 하단 바에 표시될 인덱스 카드 (클릭 시 새 데이터 로드)
   Widget _buildBottom() => Container(
     color: bottomBackgroundColor,
     height: 140,
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: marginSide),
       child: Row(
-        children: shoesBottom.map((shoe) => Expanded(child: _buildShoeCard(shoe, MediaQuery.of(context).size))).toList(),
+        children: shoesBottom.map((shoe) => Expanded(
+          child: GestureDetector(
+            onTap: () async {
+              developer.log("버튼 클릭 직전, _isLoading: $_isLoading",
+                  name: "DEBUG_2");
+              if (_isLoading) {
+                developer.log("이미 로딩 중이므로 onTap 종료",
+                    name: "DEBUG_2");
+                return;
+              }
+              developer.log("🖱️ Clicked on Bottom Index: ${shoe.name}",
+                  name: "DEBUG_2");
+
+              setState(() {
+                _isLoading = true;
+                selectedShoe = shoe.name;
+                currentPage = 1; // 검색 시 페이지 초기화
+              });
+              developer.log("🛠️ _isLoading true, selectedShoe: $selectedShoe",
+                  name: "DEBUG_2");
+
+              // 새 데이터 로드 (상단과 하단 모두 업데이트)
+              fetchedShoes = await _fetchShoes(keyword: selectedShoe);
+              developer.log("✅ _fetchShoes 완료, fetchedShoes 개수: ${fetchedShoes.length}",
+                  name: "DEBUG_2");
+
+              setState(() {
+                _isLoading = false;
+              });
+              developer.log("🔄 _isLoading false, UI 업데이트 완료",
+                  name: "DEBUG_2");
+            },
+            // inner InkWell의 onTap은 비활성화하여 외부 GestureDetector가 처리하도록 함
+            child: _buildShoeIndex(shoe, MediaQuery.of(context).size,
+                disableInkWell: true),
+          ),
+        )).toList(),
       ),
     ),
-
   );
 
+  /// 하단 인덱스 카드를 만드는 위젯 (내부 InkWell onTap은 디버깅용)
+  Widget _buildShoeIndex(Shoe shoe, Size size, {bool disableInkWell = false}) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 5.0),
+        child: InkWell(
+          onTap: disableInkWell
+              ? null
+              : () {
+            developer.log("🖱️ Clicked on Shoe Index (Inner): ${shoe.name}",
+                name: "DEBUG_2");
+          },
+          child: Stack(
+            children: [
+              Card(
+                elevation: 6,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
+                color: shoe.color,
+                child: SizedBox(height: size.width / 1.8),
+              ),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.network(
+                  shoe.image,
+                  width: double.infinity,
+                  height: size.width,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              Positioned(
+                top: 12,
+                left: 12,
+                right: 12,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        shoe.name,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16, // 조정된 폰트 크기
+                            fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "\$${shoe.price}",
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 8), // 조정된 폰트 크기
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  /// 좌측 사이드 내비게이션
   Widget _buildSideNavigation() => Positioned(
     left: 0,
     top: 0,
@@ -253,7 +370,10 @@ class _ShoesStorePageState extends State<ShoesStorePage> {
           children: ["New", "Featured", "Upcoming"].map((e) {
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 15),
-              child: Text(e, style: TextStyle(fontWeight: FontWeight.w700, color: e == "Featured" ? Colors.black : Colors.grey[400])),
+              child: Text(e,
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: e == "Featured" ? Colors.black : Colors.grey[400])),
             );
           }).toList(),
         ),
@@ -261,6 +381,7 @@ class _ShoesStorePageState extends State<ShoesStorePage> {
     ),
   );
 
+  /// 하단 내비게이션 바
   Widget _buildBottomNavigationBar() => BottomNavigationBar(
     selectedItemColor: Colors.red,
     backgroundColor: bottomBackgroundColor,
@@ -268,8 +389,15 @@ class _ShoesStorePageState extends State<ShoesStorePage> {
     elevation: 4,
     type: BottomNavigationBarType.fixed,
     items: List.generate(5, (index) {
-      final icons = [Icons.home, Icons.favorite_border, Icons.location_city, Icons.shopping_cart, Icons.person_outline];
-      return BottomNavigationBarItem(label: '', icon: Icon(icons[index]));
+      final icons = [
+        Icons.home,
+        Icons.favorite_border,
+        Icons.location_city,
+        Icons.shopping_cart,
+        Icons.person_outline
+      ];
+      return BottomNavigationBarItem(
+          label: '', icon: Icon(icons[index]));
     }),
   );
 }
