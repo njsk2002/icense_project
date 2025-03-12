@@ -7,13 +7,13 @@ import 'package:path_provider/path_provider.dart';
 import 'package:icense_project/app_clone/service/bmp_load_analyze.dart';
 import 'dart:developer' as developer;
 
-class NFCService {
+class NFCColorService {
   static const MethodChannel _platform = MethodChannel('kr.co.icense');
   static BuildContext? _context;
   static bool _isDialogShowing = false;
   static StateSetter? _dialogSetState;
   static String _dialogMessage = "🔄 NFC 초기화 중...";
-  static bool _isCompleted = false; // ✅ NFC 완료 상태 관리
+  static bool _isCompleted = false; // NFC 완료 상태 관리
 
   /// **📌 icesense 폴더 경로 가져오기**
   static Future<String> _getIcesenseFolderPath() async {
@@ -29,65 +29,40 @@ class NFCService {
     return icesensePath;
   }
 
-  /// **📌 BMP 파일을 Uint8List로 변환 (저장 후 로드)**
-  static Future<Uint8List?> _loadBmpFile(String bmpFileUrl) async {
-    try {
-      final icesensePath = await _getIcesenseFolderPath();
-      final fileName = bmpFileUrl.split('/').last;
-      final filePath = '$icesensePath/$fileName';
-      final file = File(filePath);
-
-      if (await file.exists()) {
-        developer.log("🔍 BMP 파일이 이미 존재: $filePath", name: "DEBUG_2");
-        return await file.readAsBytes();
-      }
-
-      developer.log("📢 BMP 파일 요청: $bmpFileUrl", name: "DEBUG_2");
-      final response = await http.get(Uri.parse(bmpFileUrl));
-
-      if (response.statusCode == 200) {
-        await file.writeAsBytes(response.bodyBytes);
-        developer.log("✅ BMP 파일 저장 완료: $filePath", name: "DEBUG_2");
-        return response.bodyBytes;
-      } else {
-        developer.log("❌ BMP 파일 로드 실패 (HTTP ${response.statusCode})", name: "DEBUG_2");
-        return null;
-      }
-    } catch (e) {
-      developer.log("❌ BMP 파일 로드 중 오류: $e", name: "DEBUG_2");
-      return null;
-    }
-  }
-
   /// **📌 NFC 프로세스 시작**
-  static Future<String> startNFCProcess(BuildContext context, String bmpFileUrl, int displaySize) async {
+  ///
+  /// bmpFileUrl를 통해 BMP 파일을 다운로드(또는 캐시에서 로드)하고, BMP 분석 결과(Map)
+  /// { 'uniqueColorCount', 'displaySize', 'bmpData' }를 이용해 플랫폼 채널에 전달합니다.
+  static Future<String> startNFCProcess(BuildContext context, String bmpFileUrl, int displaySizeParam) async {
     _context = context;
-    _isCompleted = false; // ✅ NFC 완료 상태 초기화
+    _isCompleted = false; // NFC 완료 상태 초기화
     if (!_isDialogShowing) {
       _showProgressDialog();
     }
 
     try {
-      Uint8List? imageBytes = await _loadBmpFile(bmpFileUrl);
+      // BMP 파일 다운로드 및 분석 → bmpResult에는 { uniqueColorCount, displaySize, bmpData }가 포함됨
+      Map<String, dynamic>? bmpResult = await BMPFileLoader.loadAndAnalyzeBmp(bmpFileUrl);
 
-      if (imageBytes == null || imageBytes.isEmpty) {
+      if (bmpResult == null ||
+          bmpResult['bmpData'] == null ||
+          (bmpResult['bmpData'] as Uint8List).isEmpty) {
         _closeProgressDialog("❌ BMP 파일을 불러오지 못했습니다.");
         return "❌ BMP 파일을 불러오지 못했습니다.";
       }
-      if (displaySize == 0) {
-        _closeProgressDialog("❌ 디스플레이 크기를 선택하세요.");
-        return "❌ 디스플레이 크기를 선택하세요.";
-      }
+      // 분석된 displaySize를 사용 (필요 시 외부 파라미터와 비교 가능)
+      int displaySize = bmpResult['displaySize'];
+      Uint8List imageBytes = bmpResult['bmpData'];
 
-      developer.log("📡 NFC 전송 시작 (파일 크기: ${imageBytes.length})", name: "DEBUG_2");
+      developer.log("📡 NFC 전송 시작 (파일 크기: ${imageBytes.length}, displaySize: $displaySize)", name: "DEBUG_2");
       _updateProgressDialog("📡 NFC 전송 시작...");
 
-      final bool result = await _platform.invokeMethod('startNFCProcess', {
+      final bool success = await _platform.invokeMethod('startNFCProcess', {
         "imageData": imageBytes,
         "displaySize": displaySize,
       });
 
-      if (result) {
+      if (success) {
         _closeProgressDialog("✅ NFC 전송 완료");
         return "✅ NFC 전송 완료";
       } else {
@@ -105,7 +80,7 @@ class NFCService {
 
   /// **📌 NFC 진행률 업데이트 (Java에서 호출)**
   static void updateNFCProgress(String message) {
-    if (_isCompleted || !_isDialogShowing) return; // ✅ NFC 완료 후 업데이트 방지
+    if (_isCompleted || !_isDialogShowing) return; // NFC 완료 후 업데이트 방지
     _updateProgressDialog(message);
   }
 
@@ -153,7 +128,7 @@ class NFCService {
 
   /// **📌 NFC 완료 후 팝업 닫기**
   static void _closeProgressDialog(String message) {
-    _isCompleted = true; // ✅ NFC 완료 상태 설정
+    _isCompleted = true; // NFC 완료 상태 설정
     _dialogMessage = message;
     if (_dialogSetState != null && _isDialogShowing) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
