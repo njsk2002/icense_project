@@ -1,219 +1,106 @@
 package kr.co.icense;
 
+import android.app.PendingIntent;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Color;
+import android.content.IntentFilter;
 import android.nfc.NfcAdapter;
 import android.nfc.Tag;
 import android.nfc.tech.NfcA;
+import android.os.Bundle;
 import android.util.Log;
-import android.app.PendingIntent;
-import android.content.IntentFilter;
-
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import io.flutter.embedding.android.FlutterActivity;
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.plugin.common.MethodChannel;
-import java.io.ByteArrayInputStream;
-import java.util.Arrays;
+import io.flutter.plugin.common.EventChannel;
+import io.flutter.plugin.common.MethodCall;
 
-import androidx.annotation.NonNull;
+public class MainActivity extends FlutterActivity {
+  private static final String CHANNEL = "kr.co.icense";
+  public static MethodChannel methodChannel; // 기존 MethodChannel
+  private EventChannel eventChannel; // EventChannel 선언
+  private static EventChannel.EventSink progressEventSink; // 이벤트 수신 객체
 
+  private NfcAdapter nfcAdapter;
 
-  public class MainActivity extends FlutterActivity {
-    private static final String CHANNEL = "kr.co.icense";
-    private NfcAdapter nfcAdapter;
-    private MethodChannel methodChannel;
+  @Override
+  public void configureFlutterEngine(@NonNull FlutterEngine flutterEngine) {
+    super.configureFlutterEngine(flutterEngine);
+    Log.d("DEBUG_2", "configureFlutterEngine: Initializing NFC adapter");
+    nfcAdapter = NfcAdapter.getDefaultAdapter(this);
 
-    @Override
-    public void configureFlutterEngine(@NonNull FlutterEngine flutterEngine) {
-      super.configureFlutterEngine(flutterEngine);
-      nfcAdapter = NfcAdapter.getDefaultAdapter(this);
-
-      methodChannel = new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), CHANNEL);
-      methodChannel.setMethodCallHandler((call, result) -> {
-        if ("startNFCProcess".equals(call.method)) {
-          byte[] imageData = call.argument("imageData");
-          int displaySize = call.argument("displaySize");
-
-          if (imageData == null) {
-            Log.e("DEBUG_2", "Image data is null");
-            result.error("INVALID_ARGUMENT", "Image data is null", null);
-            return;
-          }
-
-          if (displaySize < 0 || displaySize > 9) {
-            Log.e("DEBUG_2", "Invalid display size");
-            result.error("INVALID_ARGUMENT", "Invalid display size", null);
-            return;
-          }
-
-          if (nfcAdapter != null && !nfcAdapter.isEnabled()) {
-            showNFCSettingsDialog();
-            result.error("NFC_DISABLED", "NFC is disabled", null);
-            return;
-          }
-
-          Log.d("DEBUG_2", "NFC Reader Mode Enabled");
-          nfcAdapter.enableReaderMode(this, tag -> handleTag(tag, imageData, displaySize, result),
-                  NfcAdapter.FLAG_READER_NFC_A | NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK, null);
-        } else {
-          result.notImplemented();
-        }
-      });
-    }
-
-  private void handleTag(Tag tag, byte[] imageData, int displaySize, MethodChannel.Result result) {
-    if (tag == null) {
-      Log.e("DEBUG_2", "❌ No NFC tag detected");
-      result.error("NFC_ERROR", "No NFC tag detected", null);
-      return;
-    }
-
-    Log.d("DEBUG_2", "✅ NFC Tag Detected: " + Arrays.toString(tag.getTechList()));
-    NfcA nfcA = NfcA.get(tag);
-
-    if (nfcA == null) {
-      Log.e("DEBUG_2", "❌ Tag does not support NfcA");
-      result.error("NFC_ERROR", "Tag does not support NfcA", null);
-      return;
-    }
-
-    try {
-      waveshare.feng.nfctag.activity.a nfcLibrary = new waveshare.feng.nfctag.activity.a();
-      closeOtherTechnologies(tag);
-
-      int initResponse = nfcLibrary.a(nfcA);
-      if (initResponse != 1) {
-        Log.e("DEBUG_2", "❌ NFC Initialization Failed");
-        result.error("NFC_ERROR", "NFC initialization failed", null);
-        return;
-      }
-
-      Log.d("DEBUG_2", "✅ NFC Initialized Successfully");
-
-      // ✅ BMP 이미지를 흑백 변환하여 E-Ink 전송
-      Bitmap bitmap = convertToEInkCompatible(BitmapFactory.decodeStream(new ByteArrayInputStream(imageData)));
-      if (bitmap == null) {
-        Log.e("DEBUG_2", "❌ Failed to convert image to E-Ink format");
-        result.error("BITMAP_ERROR", "Failed to convert image", null);
-        return;
-      }
-
-      Log.d("DEBUG_2", "📤 Starting data transmission...");
-
-      // ✅ 모니터링을 먼저 실행한 후 전송을 진행
-      Thread monitorThread = new Thread(() -> monitorProgress(nfcLibrary, tag, result));
-      monitorThread.start(); // 진행률 추적 시작
-
-      int sendResponse = nfcLibrary.a(displaySize, bitmap); // NFC 전송 실행
-
-      if (sendResponse == 1) {
-        Log.d("DEBUG_2", "✅ NFC Transmission Completed");
+    methodChannel = new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), CHANNEL);
+    methodChannel.setMethodCallHandler((call, result) -> {
+      Log.d("DEBUG_2", "MethodCall received: " + call.method);
+      if ("startNFCProcess".equals(call.method)) {
+        startNFCProcess(call, result);
       } else {
-        Log.e("DEBUG_2", "❌ NFC Transmission Failed");
-        result.error("TRANSMISSION_ERROR", "Data transmission failed", null);
-        closeOtherTechnologies(tag);
-        disableNFCReaderMode();
+        Log.d("DEBUG_2", "Method not implemented: " + call.method);
+        result.notImplemented();
       }
-    } catch (Exception e) {
-      Log.e("DEBUG_2", "❌ NFC Error: " + e.getMessage());
-      result.error("NFC_ERROR", "Error: " + e.getMessage(), null);
-    } finally {
-      disableNFCReaderMode();
+    });
+    Log.d("DEBUG_2", "configureFlutterEngine: MethodChannel set up complete");
+
+    // EventChannel 설정 (채널 이름 "nfc_progress")
+    eventChannel = new EventChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), "nfc_progress");
+    eventChannel.setStreamHandler(new EventChannel.StreamHandler() {
+      @Override
+      public void onListen(Object arguments, EventChannel.EventSink events) {
+        progressEventSink = events;
+        Log.d("DEBUG_2", "EventChannel: onListen - progressEventSink set");
+      }
+
+      @Override
+      public void onCancel(Object arguments) {
+        progressEventSink = null;
+        Log.d("DEBUG_2", "EventChannel: onCancel - progressEventSink cleared");
+      }
+    });
+  }
+
+  private void startNFCProcess(MethodCall call, MethodChannel.Result result) {
+    byte[] imageData = call.argument("imageData");
+    Integer displaySize = call.argument("displaySize");
+
+    Log.d("DEBUG_2", "startNFCProcess called with displaySize: " + displaySize);
+    if (imageData == null || displaySize == null) {
+      Log.e("DEBUG_2", "Invalid arguments: imageData or displaySize is null");
+      result.error("INVALID_ARGUMENT", "Image data or displaySize is null", null);
+      return;
+    }
+
+    if (!isNFCEnabled()) {
+      Log.e("DEBUG_2", "NFC is disabled. Attempting to enable...");
+      showNFCSettingsDialog(this); // 수정된 부분: this 대신 activity 매개변수 사용
+      result.error("NFC_DISABLED", "NFC is disabled. Please enable it in settings.", null);
+      return;
+    }
+
+    int epdInch = displaySize / 10;
+    int epdColor = displaySize % 10;
+    Log.d("DEBUG_2", "Parsed epdInch: " + epdInch + ", epdColor: " + epdColor);
+
+    if (epdInch == 420 && epdColor == 2) {
+      Log.d("DEBUG_2", "Calling nfc_eink_other.startProcess() for 420x2");
+      nfc_eink_other.startProcess(this, imageData, 3, result);
+    } else {
+      nfc_eink_gooddisplay.startProcess(this, imageData, epdColor, epdInch, result);
     }
   }
-
-
-  private void closeOtherTechnologies(Tag tag) {
-    String[] techList = tag.getTechList();
-    for (String tech : techList) {
-      try {
-        switch (tech) {
-          case "android.nfc.tech.Ndef":
-            android.nfc.tech.Ndef.get(tag).close();
-            break;
-          case "android.nfc.tech.NdefFormatable":
-            android.nfc.tech.NdefFormatable.get(tag).close();
-            break;
-          case "android.nfc.tech.MifareClassic":
-            android.nfc.tech.MifareClassic.get(tag).close();
-            break;
-          case "android.nfc.tech.MifareUltralight":
-            android.nfc.tech.MifareUltralight.get(tag).close();
-            break;
-          case "android.nfc.tech.NfcA":
-            android.nfc.tech.NfcA.get(tag).close();
-            break;
-        }
-      } catch (Exception e) {
-        Log.e("DEBUG_2", "Failed to close technology: " + tech, e);
-      }
-    }
-  }
-
-  private void showNFCSettingsDialog() {
-    new AlertDialog.Builder(this)
-            .setTitle("NFC Disabled")
-            .setMessage("NFC is disabled. Please enable NFC in settings to continue.")
-            .setPositiveButton("Open Settings", (DialogInterface dialog, int which) -> {
-              Intent intent = new Intent(android.provider.Settings.ACTION_NFC_SETTINGS);
-              startActivity(intent);
-            })
-            .setNegativeButton("Cancel", null)
-            .show();
-  }
-
-
-
-  private void monitorProgress(waveshare.feng.nfctag.activity.a nfcLibrary, Tag tag, MethodChannel.Result result) {
-    try {
-      boolean isCompleted = false;
-
-      while (!isCompleted) {
-        int progress = nfcLibrary.a(); // ✅ 진행률 가져오기
-        String progressMessage = "📊 전송 중... " + progress + "%";
-        Log.d("NFC_PROGRESS", progressMessage);
-        updateNFCProgress(progressMessage); // ✅ Flutter에 진행률 전달
-
-        if (progress >= 100) { // ✅ 완료 체크
-          updateNFCProgress("✅ NFC 전송 완료!");
-          Log.d("DEBUG_2", "✅ NFC Data Transmission Completed");
-          result.success(true);
-          isCompleted = true;
-          closeOtherTechnologies(tag);
-          disableNFCReaderMode();
-        } else if (progress < 0) { // ❌ 오류 발생 시
-          updateNFCProgress("❌ NFC 전송 오류 발생!");
-          Log.e("DEBUG_2", "❌ Transmission Error Occurred");
-          result.error("TRANSMISSION_ERROR", "Error occurred while monitoring progress", null);
-          isCompleted = true;
-        }
-
-        Thread.sleep(500); // ✅ 0.5초마다 체크
-      }
-    } catch (Exception e) {
-      updateNFCProgress("❌ NFC 모니터링 오류: " + e.getMessage());
-      Log.e("DEBUG_2", "❌ NFC Monitoring Error: " + e.getMessage());
-      result.error("MONITORING_ERROR", "Error during progress monitoring", null);
-    } finally {
-      disableNFCReaderMode();
-    }
-  }
-
-
 
   @Override
   protected void onResume() {
     super.onResume();
+    Log.d("DEBUG_2", "onResume: Enabling NFC foreground dispatch");
     enableNFCForegroundDispatch();
   }
 
   @Override
   protected void onPause() {
     super.onPause();
+    Log.d("DEBUG_2", "onPause: Disabling NFC foreground dispatch");
     disableNFCForegroundDispatch();
   }
 
@@ -221,49 +108,51 @@ import androidx.annotation.NonNull;
     if (nfcAdapter != null) {
       Intent intent = new Intent(this, getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
       PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_MUTABLE);
-      IntentFilter[] filters = new IntentFilter[] { new IntentFilter(NfcAdapter.ACTION_TECH_DISCOVERED) };
-      String[][] techList = new String[][] { new String[] { NfcA.class.getName() } };
+      IntentFilter[] filters = new IntentFilter[]{ new IntentFilter(NfcAdapter.ACTION_TECH_DISCOVERED) };
+      String[][] techList = new String[][]{ new String[]{ NfcA.class.getName() } };
       nfcAdapter.enableForegroundDispatch(this, pendingIntent, filters, techList);
-      Log.d("DEBUG_2", "Foreground Dispatch Enabled");
+      Log.d("DEBUG_2", "enableNFCForegroundDispatch: Foreground Dispatch Enabled");
+    } else {
+      Log.e("DEBUG_2", "enableNFCForegroundDispatch: NFC adapter is null");
     }
   }
 
   private void disableNFCForegroundDispatch() {
     if (nfcAdapter != null) {
       nfcAdapter.disableForegroundDispatch(this);
-      Log.d("DEBUG_2", "Foreground Dispatch Disabled");
+      Log.d("DEBUG_2", "disableNFCForegroundDispatch: Foreground Dispatch Disabled");
+    } else {
+      Log.e("DEBUG_2", "disableNFCForegroundDispatch: NFC adapter is null");
     }
   }
 
+  private boolean isNFCEnabled() {
+    return nfcAdapter != null && nfcAdapter.isEnabled();
+  }
 
+  // 수정된 부분: static 메서드로 변경하고, Activity 매개변수를 사용
+  public static void showNFCSettingsDialog(MainActivity activity) {
+    new AlertDialog.Builder(activity)
+            .setTitle("NFC Disabled")
+            .setMessage("NFC is disabled. Please enable NFC in settings to continue.")
+            .setPositiveButton("Open Settings", new DialogInterface.OnClickListener() {
+              @Override
+              public void onClick(DialogInterface dialog, int which) {
+                Intent intent = new Intent(android.provider.Settings.ACTION_NFC_SETTINGS);
+                activity.startActivity(intent);
+              }
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+  }
 
-
-
-  private void disableNFCReaderMode() {
-    if (nfcAdapter != null) {
-      nfcAdapter.disableReaderMode(this);
-      Log.d("DEBUG_2", "NFC Reader Mode Disabled");
+  // MainActivity에서 이벤트 전송을 위한 메서드
+  public static void sendProgressUpdate(int progress) {
+    if (progressEventSink != null) {
+      progressEventSink.success(progress);
+      Log.d("DEBUG_2", "sendProgressUpdate: progress sent: " + progress + "%");
+    } else {
+      Log.e("DEBUG_2", "sendProgressUpdate: progressEventSink is null");
     }
   }
-
-  private Bitmap convertToEInkCompatible(Bitmap original) {
-    Bitmap converted = Bitmap.createBitmap(original.getWidth(), original.getHeight(), Bitmap.Config.ARGB_8888);
-    for (int y = 0; y < original.getHeight(); y++) {
-      for (int x = 0; x < original.getWidth(); x++) {
-        int color = original.getPixel(x, y);
-        int gray = (int) (0.299 * ((color >> 16) & 0xff) + 0.587 * ((color >> 8) & 0xff) + 0.114 * (color & 0xff));
-        converted.setPixel(x, y, gray > 128 ? Color.WHITE : Color.BLACK);
-      }
-    }
-    return converted;
-  }
-
-  private void updateNFCProgress(String message) {
-    runOnUiThread(() -> {
-      if (methodChannel != null) {
-        methodChannel.invokeMethod("updateNFCProgress", message);
-      }
-    });
-  }
-
 }

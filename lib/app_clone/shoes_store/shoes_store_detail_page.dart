@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'shoes_store_page.dart';
-import 'package:icense_project/app_clone/service/nfc_communication.dart';
+import 'package:icense_project/app_clone/service/nfc_comm_color.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -109,7 +109,7 @@ class _ShoesStoreDetailPageState extends State<ShoesStoreDetailPage> {
 
     setState(() => isSending = true);
 
-    String result = await NFCService.startNFCProcess(context, bmpImageUrl, 3);
+    String result = await NFCColorService.startNFCProcess(context, bmpImageUrl, 3);
 
     setState(() => isSending = false);
 
